@@ -1,0 +1,6 @@
+name: mtg-deck-data
+channels:
+  - defaults
+dependencies:
+  - python=3.10
+

@@ -1,0 +1,17 @@
+[tool.poetry]
+name = "mtg-deck-data"
+version = "0.1.0"
+description = "Package for collection deck data for Magic: The Gathering"
+authors = ["kschluns <kschluns@bu.edu>"]
+readme = "README.md"
+packages = [{include = "mtg_deck_data"}]
+
+[tool.poetry.dependencies]
+python = "~3.10"
+pandas = "^1.5.2"
+beautifulsoup4 = "^4.11.1"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
