@@ -15,6 +15,7 @@ selenium = "^4.7.2"
 webdriver-manager = "^3.8.5"
 pyarrow = "^10.0.1"
 fastparquet = "^2022.12.0"
+seaborn = "^0.12.1"
 
 
 [build-system]
