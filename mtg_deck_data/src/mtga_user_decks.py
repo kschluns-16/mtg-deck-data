@@ -16,7 +16,7 @@ def safe_soup(url):
             is_response_done = True
         except:
             print(f"failed getting response from {url} (waiting 10 min before the next call)")
-            time.wait(60*10)
+            time.sleep(60*10)
 
     soup = BeautifulSoup(response.text,"html5lib")
 
