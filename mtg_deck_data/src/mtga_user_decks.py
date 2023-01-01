@@ -1,22 +1,40 @@
 from bs4 import BeautifulSoup 
 import requests
 import pandas as pd
-import re
-from functools import reduce
-from operator import add
+import time
 
-source = "aetherhub.com"
-base_domain = "https://aetherhub.com"
-base_url_list = [
-    f"{base_domain}/MTGA/ConstructedRankingLadder/?p=",
-]
+START_FROM_SCRATCH = False
+
 headers = {'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.95 Safari/537.36'}
 
-decks_downloaded = pd.read_parquet("mtg_deck_data/data/mtga_user_decks.parquet")
-deck_urls_downloaded = set(decks_downloaded['deck_url'].tolist())
+def safe_soup(url):
 
-# decks_downloaded = pd.DataFrame()
-# deck_urls_downloaded = set()
+    is_response_done = False 
+    while not is_response_done:
+        try:
+            response = requests.get(url, headers=headers)
+            is_response_done = True
+        except:
+            print(f"failed getting response from {url} (waiting 10 min before the next call)")
+            time.wait(60*10)
+
+    soup = BeautifulSoup(response.text,"html5lib")
+
+    return response, soup
+
+source = "aetherhub.com"
+output_file = "mtg_deck_data/data/mtga_user_decks.parquet"
+base_domain = "https://aetherhub.com"
+base_url_list = [
+    f"{base_domain}/MTGA/ConstructedRankingLadder/48?p=",
+]
+
+if START_FROM_SCRATCH:
+    decks_downloaded = pd.DataFrame()
+    deck_urls_downloaded = set()
+else:
+    decks_downloaded = pd.read_parquet(output_file)
+    deck_urls_downloaded = set(decks_downloaded['deck_url'].tolist())
 
 output = []
 
@@ -29,10 +47,12 @@ for base_url in base_url_list:
 
         print(f"Scraping {base_url}{page_num}")
 
-        response = requests.get(f"{base_url}{page_num}", headers=headers)
-        soup = BeautifulSoup(response.text,"html.parser")
+        response, soup = safe_soup(f"{base_url}{page_num}")
 
         user_list = soup.find_all("td", {"class": "rank-user"})
+
+        # UNCOMMENT BELOW IF... you have to start script from the middle of a certain page
+        # user_list = user_list[79:] if page_num == 11 else user_list
 
         for user in user_list:
             
@@ -41,8 +61,7 @@ for base_url in base_url_list:
 
             place_finish = user.find("span").text.strip(" \r\n").replace("\r","").replace("\n","")
 
-            response_user = requests.get(user_url, headers=headers)
-            soup_user = BeautifulSoup(response_user.text,"html.parser")
+            response_user, soup_user = safe_soup(user_url)
 
             table_results = soup_user.find_all("div", {"class":"d-flex justify-content-start flex-wrap mb-3"})
 
@@ -59,14 +78,13 @@ for base_url in base_url_list:
                     event = event.find_all("div")
                     wins += int(event[0].text.split(" ")[0])
                     losses += int(event[1].text.split(" ")[0])
-                wl_rate = wins / (wins + losses)
+                wl_rate = wins / (wins + losses) if (wins + losses) > 0 else None
 
                 if deck_url not in deck_urls_downloaded:
 
                     deck_urls_downloaded.add(deck_url)
 
-                    response_deck = requests.get(deck_url,headers=headers)
-                    soup_deck = BeautifulSoup(response_deck.text,"html.parser")
+                    response_deck, soup_deck = safe_soup(deck_url)
                     
                     deck_table = soup_deck.find("div",{"class":"deck-container mb-3"})
 
@@ -85,7 +103,7 @@ for base_url in base_url_list:
                         output = pd.DataFrame(output,columns=["mtg_format","source","deck_url","deck","wins","losses","win_rate","place"])
                         output = pd.concat([decks_downloaded,output],ignore_index=True).drop_duplicates()
                         print(f"exporting deck! ({len(output)} decks)")
-                        output.to_parquet("mtg_deck_data/data/mtga_user_decks.parquet")
+                        output.to_parquet(output_file)
                         decks_downloaded = output.copy()
                         output = []
 
@@ -98,6 +116,6 @@ for base_url in base_url_list:
     output = pd.DataFrame(output,columns=["mtg_format","source","deck_url","deck","wins","losses","win_rate","place"])
     output = pd.concat([decks_downloaded,output],ignore_index=True).drop_duplicates()
     print(f"exporting deck! ({len(output)} decks)")
-    output.to_parquet("mtg_deck_data/data/mtga_user_decks.parquet")
+    output.to_parquet(output_file)
     decks_downloaded = output.copy()
     output = []

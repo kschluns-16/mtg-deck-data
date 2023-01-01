@@ -5,7 +5,27 @@ import re
 from functools import reduce
 from operator import add
 
+START_FROM_SCRATCH = False
+
+headers = {'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.95 Safari/537.36'}
+
+def safe_soup(url):
+
+    is_response_done = False 
+    while not is_response_done:
+        try:
+            response = requests.get(url, headers=headers)
+            is_response_done = True
+        except:
+            print(f"failed getting response from {url} (waiting 10 min before the next call)")
+            time.wait(60*10)
+
+    soup = BeautifulSoup(response.text,"html5lib")
+
+    return response, soup
+    
 source = "aetherhub.com"
+output_file = "mtg_deck_data/data/aetherhub_decks.parquet"
 base_domain = "https://aetherhub.com"
 base_url_list = [
     (f"{base_domain}/MTGA-Decks/Standard-BO1/?p=","Standard"),
@@ -17,13 +37,13 @@ base_url_list = [
     (f"{base_domain}/MTGA-Decks/Explorer-BO1/?p=","Explorer"),
     (f"{base_domain}/MTGA-Decks/Traditional-Explorer/?p=","Explorer"),
 ]
-headers = {'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.95 Safari/537.36'}
 
-# decks_downloaded = pd.read_parquet("mtg_deck_data/data/aetherhub_decks.parquet")
-# deck_urls_downloaded = set(decks_downloaded['deck_url'].tolist())
-
-decks_downloaded = pd.DataFrame()
-deck_urls_downloaded = set()
+if START_FROM_SCRATCH:
+    decks_downloaded = pd.DataFrame()
+    deck_urls_downloaded = set()
+else:
+    decks_downloaded = pd.read_parquet(output_file)
+    deck_urls_downloaded = set(decks_downloaded['deck_url'].tolist())
 
 output = []
 
@@ -36,8 +56,7 @@ for base_url, mtg_format in base_url_list:
 
         print(f"Scraping {base_url}{page_num}")
 
-        response = requests.get(f"{base_url}{page_num}", headers=headers)
-        soup = BeautifulSoup(response.text,"html.parser")
+        response, soup = safe_soup(f"{base_url}{page_num}")
 
         table_results = soup.find_all("tr", {"class": "ae-tbody-deckrow"})
 
@@ -50,8 +69,7 @@ for base_url, mtg_format in base_url_list:
 
                 deck_urls_downloaded.add(deck_url)
 
-                response_deck = requests.get(deck_url,headers=headers)
-                soup_deck = BeautifulSoup(response_deck.text,"html.parser")
+                response_deck, soup_deck = safe_soup(deck_url)
 
                 regex_match = re.search("(\d+)% Win Rate: (\d+) Wins - (\d+) Losses",deck_cols[3].text)
                 if regex_match:
@@ -87,7 +105,7 @@ for base_url, mtg_format in base_url_list:
                     output = pd.DataFrame(output,columns=["mtg_format","source","deck_url","deck","wins","losses","win_rate","place"])
                     output = pd.concat([decks_downloaded,output],ignore_index=True).drop_duplicates()
                     print(f"exporting deck! ({len(output)} decks)")
-                    output.to_parquet("mtg_deck_data/data/aetherhub_decks.parquet")
+                    output.to_parquet(output_file)
                     decks_downloaded = output.copy()
                     output = []
 
@@ -100,6 +118,6 @@ for base_url, mtg_format in base_url_list:
     output = pd.DataFrame(output,columns=["mtg_format","source","deck_url","deck","wins","losses","win_rate","place"])
     output = pd.concat([decks_downloaded,output],ignore_index=True).drop_duplicates()
     print(f"exporting deck! ({len(output)} decks)")
-    output.to_parquet("mtg_deck_data/data/aetherhub_decks.parquet")
+    output.to_parquet(output_file)
     decks_downloaded = output.copy()
     output = []
